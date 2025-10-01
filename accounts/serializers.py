@@ -1,36 +1,87 @@
 from rest_framework import serializers
 from .models import User
+from .services import check_handle_availability
+from django.core.exceptions import ValidationError as DjangoValidationError
+from .models import normalize_username
+
 
 class UserSerializer(serializers.ModelSerializer):
     """
-    Read-only serializer for basic public user information.
+    Internal use only (e.g., friendships). Includes the UUID `id` for app-internal relations.
+    Do NOT use this for public profile responses.
     """
     class Meta:
         model = User
-        fields = [
-            'id',
-            'username',
-            'first_name',
-            'last_name',
-        ]
-        read_only_fields = fields
+        fields = ("id", "username", "first_name", "last_name", "avatar")
 
 
-class UserDetailSerializer(serializers.ModelSerializer):
+class UsernameAvailabilitySerializer(serializers.Serializer):
+    username = serializers.CharField()
+    available = serializers.BooleanField(read_only=True)
+    reason = serializers.CharField(read_only=True, allow_null=True)
+
+    def to_representation(self, instance):
+        username = self.context.get("username", "").strip()
+        ok, reason = check_handle_availability(username)
+        return {"username": username, "available": ok, "reason": None if ok else reason}
+
+
+class PublicUserSerializer(serializers.ModelSerializer):
     """
-    Serializer for the authenticated user's full profile details.
-    Used for the /api/v1/user/me endpoint.
+    Public-facing profile. Do NOT include UUID or email here.
     """
     class Meta:
         model = User
-        fields = [
-            'id',
-            'username',
-            'email',
-            'first_name',
-            'last_name',
-            'date_joined',
-        ]
-        # 'username' can be updatable or read-only depending on your business logic.
-        # For now, we'll make it read-only after creation.
-        read_only_fields = ['id', 'username', 'date_joined']
+        fields = ("username", "first_name", "last_name", "avatar")
+
+
+class MeSerializer(serializers.ModelSerializer):
+    """
+    Authenticated user's own profile. Username is immutable here.
+    """
+    class Meta:
+        model = User
+        fields = ("username", "first_name", "last_name", "bio", "avatar", "email")
+        read_only_fields = ("username",)
+
+
+class RegisterSerializer(serializers.ModelSerializer):
+    """
+    Registration serializer. Applies model-level username policy on save().
+    """
+    password = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = User
+        fields = ("username", "first_name", "last_name", "email", "password")
+
+    def create(self, validated_data):
+        password = validated_data.pop("password")
+        user = User(**validated_data)
+        user.set_password(password)
+        user.save()
+        return user
+
+
+class UsernameChangeSerializer(serializers.Serializer):
+    new_username = serializers.CharField()
+
+    def validate(self, attrs):
+        user = self.context["request"].user
+        new_u = normalize_username(attrs["new_username"].strip())
+        cur_u = normalize_username(user.username)
+        if new_u == cur_u:
+            # همان نام فعلی؛ اجازه نده
+            raise serializers.ValidationError({"new_username": "same_username"})
+        return attrs
+
+    def save(self, **kwargs):
+        user = self.context["request"].user
+        new_username = self.validated_data["new_username"].strip()
+        try:
+            user.change_username(new_username)
+        except DjangoValidationError as e:
+            reason = e.messages[0] if e.messages else "invalid"
+            raise serializers.ValidationError({"new_username": reason})
+        return user
+

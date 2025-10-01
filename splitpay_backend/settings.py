@@ -129,6 +129,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = 'static/'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -146,16 +148,38 @@ AUTH_USER_MODEL = 'accounts.User'
 SITE_CURRENCY_CODE = 'USD'
 SITE_CURRENCY_MINOR_UNITS = 2
 
+# --- Username (handle) policy ---
+USERNAME_MIN_LEN = 3
+USERNAME_MAX_LEN = 32
+USERNAME_REGEX = r'^[a-z0-9_]{3,32}$'
+USERNAME_CHANGE_WINDOW_DAYS = 7          # پنجره‌ی ۷روزه برای یک‌بار تغییر
+USERNAME_IMMUTABLE_AFTER_WINDOW = True
+
+# اگر رزروها را از DB نخواند (fallback در محیط dev)
+RESERVED_USERNAMES_DEFAULT = {
+    "admin","administrator","root","system","support","help","api","docs",
+    "static","media","login","logout","register","settings","me","user",
+    "users","group","groups","invite","notifications","feed","explore","search"
+}
+
 # 3. Django REST Framework Settings
 # Django REST Framework settings
 REST_FRAMEWORK = {
-    # Use TokenAuthentication as the default method for identifying users.
-    # This is the standard for API-first, decoupled applications.
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
     ],
-    # Require users to be authenticated for all API endpoints by default.
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
-    ]
-}
+    ],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/minute",
+        "user": "1000/day",
+        "username_availability": "10/minute",
+        "register": "5/hour",
+        "username_change": "20/minute",
+    },
+    }

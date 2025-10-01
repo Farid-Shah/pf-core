@@ -1,13 +1,16 @@
 from django.urls import path
-from rest_framework.routers import DefaultRouter
-from .views import UserViewSet, CurrentUserView
+from .views import (
+    UsernameAvailabilityView,
+    RegisterView,
+    MeView,
+    PublicUserView,
+    UsernameChangeView,
+)
 
-# Create a router and register our viewsets with it.
-router = DefaultRouter()
-router.register(r'users', UserViewSet, basename='user')
-
-# The API URLs are determined automatically by the router.
-# The `urlpatterns` will be a combination of the router's URLs and any custom paths.
 urlpatterns = [
-    path('user/me/', CurrentUserView.as_view(), name='current-user'),
-] + router.urls
+    path("username-availability/", UsernameAvailabilityView.as_view(), name="username-availability"),
+    path("auth/register/", RegisterView.as_view(), name="auth-register"),
+    path("user/me/", MeView.as_view(), name="user-me"),
+    path("user/username-change/", UsernameChangeView.as_view(), name="user-username-change"),
+    path("users/<str:username>/", PublicUserView.as_view(), name="user-public"),
+]
