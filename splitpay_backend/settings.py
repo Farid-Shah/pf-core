@@ -25,7 +25,13 @@ SECRET_KEY = "django-insecure-(+u(5pwa=k-v+0v31q-%auv_@av+@im!0^^*p!tp-_^-fvjkl0
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    "[::1]",
+    "testserver",  # برای تست‌ها و APIClient
+]
+
 
 
 # Application definition
@@ -167,9 +173,15 @@ RESERVED_USERNAMES_DEFAULT = {
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.FormParser',
+        'rest_framework.parsers.MultiPartParser',
     ],
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
@@ -182,4 +194,4 @@ REST_FRAMEWORK = {
         "register": "5/hour",
         "username_change": "20/minute",
     },
-    }
+}

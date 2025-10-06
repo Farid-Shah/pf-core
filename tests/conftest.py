@@ -1,7 +1,13 @@
+import os
 import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from django.core.cache import cache
+import django
+
+django.setup()
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "splitpay_backend.settings")
 
 User = get_user_model()
 
