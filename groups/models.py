@@ -42,14 +42,6 @@ class Group(models.Model):
         default=GroupType.OTHER
     )
     
-    default_currency = models.ForeignKey(
-        'currencies.Currency',
-        on_delete=models.PROTECT,
-        related_name='groups',
-        to_field='code',
-        help_text="Default currency for expenses in this group"
-    )
-    
     # Settings
     simplify_debts = models.BooleanField(
         default=True,
@@ -74,7 +66,6 @@ class Group(models.Model):
         indexes = [
             models.Index(fields=['created_at']),
             models.Index(fields=['type']),
-            models.Index(fields=['default_currency']),
         ]
     
     def __str__(self):

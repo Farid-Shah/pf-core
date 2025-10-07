@@ -82,7 +82,10 @@ class GroupViewSet(viewsets.ModelViewSet):
         """
         return Group.objects.filter(
             members__user=self.request.user
-        ).select_related('default_currency').distinct()
+        ).prefetch_related(
+            'members',
+            'members__user'
+        ).distinct()
     
     def get_serializer_class(self):
         """
