@@ -5,7 +5,12 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path('api/v1/', include('splitpay_backend.api_router')),  # All app routes here
+    
+    # API routes
+    path('api/v1/', include('splitpay_backend.api_router')),  # All apps except accounts
+    path("api/v1/", include("accounts.urls")),  # Accounts separate (for auth endpoints)
+    
+    # DRF browsable API auth
     path('api-auth/', include('rest_framework.urls')),
 ]
 
