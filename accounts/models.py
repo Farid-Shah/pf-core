@@ -218,15 +218,24 @@ class User(AbstractUser):
             # Creation
             self.clean_username_policy(self.username, changing=False)
         else:
-            # If `username` changes on update, enforce `changing=True` policy
+            # Update - check if username is being changed
             if "update_fields" in kwargs and kwargs["update_fields"] is not None:
+                # Specific fields being updated
                 if "username" in kwargs["update_fields"]:
-                    # Don't re-validate if called from change_username()
-                    # (it already validated)
+                    # Username is in update_fields - it's being changed via change_username()
+                    # Don't re-validate (already validated in change_username())
                     pass
             else:
-                old = type(self).objects.filter(pk=self.pk).values_list("username", flat=True).first()
-                if old is not None and old != self.username:
-                    self.clean_username_policy(self.username, changing=True)
+                # No update_fields specified - fetch old value and compare
+                if self.pk:
+                    old_username = type(self).objects.filter(pk=self.pk).values_list("username", flat=True).first()
+                    if old_username and normalize_username(old_username) != normalize_username(self.username):
+                        # Username is being changed via direct save() - validate with changing=True
+                        self.clean_username_policy(self.username, changing=True)
+                        
+                        # Track the change (increment counter and timestamp)
+                        # This ensures the one-time rule is enforced even with direct save()
+                        self.username_change_count += 1
+                        self.username_changed_at = timezone.now()
 
         super().save(*args, **kwargs)
