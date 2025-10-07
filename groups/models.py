@@ -269,10 +269,5 @@ class GroupMember(models.Model):
         
         # Prevent self-referential groups (edge case)
         if hasattr(self, 'group') and hasattr(self, 'user'):
-            if self.group.id == self.user.id:
+            if self.user and self.group and self.group.id == self.user.id:
                 raise ValidationError("Group ID cannot equal User ID")
-    
-    def save(self, *args, **kwargs):
-        """Override save to run validation."""
-        self.full_clean()
-        super().save(*args, **kwargs)
