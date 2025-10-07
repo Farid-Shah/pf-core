@@ -361,7 +361,6 @@ class GroupService:
     def create_group(
         name: str,
         type: str,
-        default_currency_code: str,
         created_by: User,
         simplify_debts: bool = True,
         invite_link: Optional[str] = None
@@ -372,7 +371,6 @@ class GroupService:
         Args:
             name: Group name
             type: Group type (HOUSEHOLD/TRIP/PROJECT/OTHER)
-            default_currency_code: Currency code (e.g., 'USD')
             created_by: User creating the group
             simplify_debts: Whether to simplify debts (default: True)
             invite_link: Optional custom invite link
@@ -383,14 +381,6 @@ class GroupService:
         Raises:
             ValidationError: If validation fails
         """
-        from currencies.models import Currency
-        
-        # Validate currency exists
-        try:
-            currency = Currency.objects.get(code=default_currency_code)
-        except Currency.DoesNotExist:
-            raise ValidationError(f"Currency {default_currency_code} not found")
-        
         # Validate group type
         if type not in [t.value for t in Group.GroupType]:
             raise ValidationError(f"Invalid group type: {type}")
@@ -399,7 +389,6 @@ class GroupService:
         group = Group.objects.create(
             name=name,
             type=type,
-            default_currency=currency,
             simplify_debts=simplify_debts,
             invite_link=invite_link
         )
@@ -424,50 +413,11 @@ class GroupService:
     
     @staticmethod
     @transaction.atomic
-    def delete_group(group: Group, deleted_by: User):
-        """
-        Delete a group (soft delete or hard delete).
-        
-        Only OWNER can delete.
-        
-        Args:
-            group: Group to delete
-            deleted_by: User performing deletion
-            
-        Raises:
-            PermissionDenied: If deleted_by is not owner
-        """
-        # Permission check
-        checker = PermissionChecker(group, deleted_by)
-        checker.require(
-            GroupPermission.DELETE_GROUP,
-            message="Only group owner can delete the group"
-        )
-        
-        # Store info before deletion
-        group_id = group.id
-        group_name = group.name
-        
-        # Delete group (cascade will delete members, expenses, etc.)
-        group.delete()
-        
-        # TODO: Log activity
-        # ActivityLog.log(
-        #     actor=deleted_by,
-        #     verb='deleted',
-        #     entity_type='group',
-        #     entity_id=group_id,
-        #     metadata={'name': group_name}
-        # )
-    
-    @staticmethod
-    @transaction.atomic
     def update_group_settings(
         group: Group,
         updated_by: User,
         name: Optional[str] = None,
         type: Optional[str] = None,
-        default_currency_code: Optional[str] = None,
         simplify_debts: Optional[bool] = None
     ) -> Group:
         """
@@ -478,7 +428,6 @@ class GroupService:
             updated_by: User performing update
             name: New name (optional)
             type: New type (optional)
-            default_currency_code: New currency (optional)
             simplify_debts: New simplify_debts setting (optional)
             
         Returns:
@@ -488,8 +437,6 @@ class GroupService:
             PermissionDenied: If updated_by lacks permission
             ValidationError: If validation fails
         """
-        from currencies.models import Currency
-        
         # Permission check
         checker = PermissionChecker(group, updated_by)
         checker.require(GroupPermission.UPDATE_GROUP_SETTINGS)
@@ -508,15 +455,6 @@ class GroupService:
             group.type = type
             changes['type'] = type
         
-        # Update currency
-        if default_currency_code is not None and default_currency_code != group.default_currency_id:
-            try:
-                currency = Currency.objects.get(code=default_currency_code)
-                group.default_currency = currency
-                changes['default_currency'] = default_currency_code
-            except Currency.DoesNotExist:
-                raise ValidationError(f"Currency {default_currency_code} not found")
-        
         # Update simplify_debts
         if simplify_debts is not None and simplify_debts != group.simplify_debts:
             group.simplify_debts = simplify_debts
@@ -534,124 +472,5 @@ class GroupService:
             #     entity_id=group.id,
             #     metadata=changes
             # )
-        
-        return group
-    
-    @staticmethod
-    @transaction.atomic
-    def generate_invite_link(group: Group, generated_by: User) -> str:
-        """
-        Generate a unique invite link for the group.
-        
-        Args:
-            group: Group to generate link for
-            generated_by: User generating the link
-            
-        Returns:
-            str: Generated invite link token
-            
-        Raises:
-            PermissionDenied: If generated_by lacks permission
-        """
-        # Permission check
-        checker = PermissionChecker(group, generated_by)
-        checker.require(GroupPermission.MANAGE_INVITE_LINK)
-        
-        # Generate unique token
-        max_attempts = 10
-        for _ in range(max_attempts):
-            token = get_random_string(length=32)
-            
-            # Check if unique
-            if not Group.objects.filter(invite_link=token).exists():
-                group.invite_link = token
-                group.save(update_fields=['invite_link', 'updated_at'])
-                
-                # TODO: Log activity
-                # ActivityLog.log(
-                #     actor=generated_by,
-                #     verb='generated_invite_link',
-                #     entity_type='group',
-                #     entity_id=group.id,
-                #     metadata={'token': token}
-                # )
-                
-                return token
-        
-        raise ValidationError("Failed to generate unique invite link")
-    
-    @staticmethod
-    @transaction.atomic
-    def revoke_invite_link(group: Group, revoked_by: User):
-        """
-        Revoke (delete) the group's invite link.
-        
-        Args:
-            group: Group to revoke link for
-            revoked_by: User revoking the link
-            
-        Raises:
-            PermissionDenied: If revoked_by lacks permission
-        """
-        # Permission check
-        checker = PermissionChecker(group, revoked_by)
-        checker.require(GroupPermission.MANAGE_INVITE_LINK)
-        
-        old_link = group.invite_link
-        group.invite_link = None
-        group.save(update_fields=['invite_link', 'updated_at'])
-        
-        # TODO: Log activity
-        # ActivityLog.log(
-        #     actor=revoked_by,
-        #     verb='revoked_invite_link',
-        #     entity_type='group',
-        #     entity_id=group.id,
-        #     metadata={'old_token': old_link}
-        # )
-    
-    @staticmethod
-    @transaction.atomic
-    def join_via_invite_link(invite_link: str, user: User) -> Group:
-        """
-        Join a group using an invite link.
-        
-        Args:
-            invite_link: Invite link token
-            user: User joining the group
-            
-        Returns:
-            Group: Group that was joined
-            
-        Raises:
-            ValidationError: If link is invalid or user already member
-        """
-        # Find group by invite link
-        try:
-            group = Group.objects.get(invite_link=invite_link)
-        except Group.DoesNotExist:
-            raise ValidationError("Invalid invite link")
-        
-        # Check if already a member
-        if group.is_member(user):
-            raise AlreadyMemberError(
-                f"You are already a member of {group.name}"
-            )
-        
-        # Add as MEMBER (default role for invite links)
-        GroupMember.objects.create(
-            group=group,
-            user=user,
-            role=GroupMember.Role.MEMBER
-        )
-        
-        # TODO: Log activity
-        # ActivityLog.log(
-        #     actor=user,
-        #     verb='joined_via_invite',
-        #     entity_type='group',
-        #     entity_id=group.id,
-        #     metadata={'invite_link': invite_link}
-        # )
         
         return group

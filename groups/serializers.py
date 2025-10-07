@@ -11,7 +11,6 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 
 from accounts.serializers import UserSerializer
-from currencies.models import Currency
 from .models import Group, GroupMember
 
 User = get_user_model()
@@ -50,7 +49,6 @@ class GroupSerializer(serializers.ModelSerializer):
     Used in: list view, select dropdowns
     """
     type_display = serializers.CharField(source='get_type_display', read_only=True)
-    default_currency_code = serializers.CharField(source='default_currency.code', read_only=True)
     member_count = serializers.IntegerField(read_only=True)
     
     class Meta:
@@ -60,7 +58,6 @@ class GroupSerializer(serializers.ModelSerializer):
             'name',
             'type',
             'type_display',
-            'default_currency_code',
             'member_count',
             'created_at',
         ]
@@ -81,7 +78,6 @@ class GroupDetailSerializer(serializers.ModelSerializer):
     Used in: retrieve view, after create/update
     """
     type_display = serializers.CharField(source='get_type_display', read_only=True)
-    default_currency_code = serializers.CharField(source='default_currency.code', read_only=True)
     members = GroupMemberSerializer(many=True, read_only=True)
     owner = UserSerializer(read_only=True)
     member_count = serializers.IntegerField(read_only=True)
@@ -98,7 +94,6 @@ class GroupDetailSerializer(serializers.ModelSerializer):
             'name',
             'type',
             'type_display',
-            'default_currency_code',
             'simplify_debts',
             'invite_link',
             'members',
@@ -175,11 +170,6 @@ class GroupCreateSerializer(serializers.Serializer):
         help_text="Group type: HOUSEHOLD, TRIP, PROJECT, or OTHER"
     )
     
-    default_currency_code = serializers.CharField(
-        max_length=3,
-        help_text="ISO 4217 currency code (e.g., USD, EUR)"
-    )
-    
     simplify_debts = serializers.BooleanField(
         default=True,
         help_text="Whether to simplify debts using graph algorithms"
@@ -192,16 +182,6 @@ class GroupCreateSerializer(serializers.Serializer):
         allow_blank=True,
         help_text="Optional custom invite link token"
     )
-    
-    def validate_default_currency_code(self, value):
-        """Validate currency exists."""
-        try:
-            Currency.objects.get(code=value)
-        except Currency.DoesNotExist:
-            raise serializers.ValidationError(
-                f"Currency '{value}' not found. Please use a valid ISO 4217 code."
-            )
-        return value
     
     def validate_name(self, value):
         """Validate name is not empty after stripping."""
@@ -228,24 +208,10 @@ class GroupUpdateSerializer(serializers.Serializer):
         help_text="Group type"
     )
     
-    default_currency_code = serializers.CharField(
-        max_length=3,
-        required=False,
-        help_text="Default currency code"
-    )
-    
     simplify_debts = serializers.BooleanField(
         required=False,
         help_text="Whether to simplify debts"
     )
-    
-    def validate_default_currency_code(self, value):
-        """Validate currency exists."""
-        try:
-            Currency.objects.get(code=value)
-        except Currency.DoesNotExist:
-            raise serializers.ValidationError(f"Currency '{value}' not found")
-        return value
     
     def validate_name(self, value):
         """Validate name is not empty."""
@@ -375,11 +341,9 @@ class GroupMinimalSerializer(serializers.ModelSerializer):
     
     Used in: Expense serializers, Payment serializers, etc.
     """
-    default_currency_code = serializers.CharField(source='default_currency.code', read_only=True)
-    
     class Meta:
         model = Group
-        fields = ['id', 'name', 'type', 'default_currency_code']
+        fields = ['id', 'name', 'type']
         read_only_fields = fields
 
 

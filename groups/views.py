@@ -114,7 +114,6 @@ class GroupViewSet(viewsets.ModelViewSet):
         Body: {
             "name": "Summer Trip 2025",
             "type": "TRIP",
-            "default_currency_code": "USD",
             "simplify_debts": true
         }
         """
@@ -127,7 +126,6 @@ class GroupViewSet(viewsets.ModelViewSet):
             group = GroupService.create_group(
                 name=serializer.validated_data['name'],
                 type=serializer.validated_data['type'],
-                default_currency_code=serializer.validated_data['default_currency_code'],
                 created_by=request.user,
                 simplify_debts=serializer.validated_data.get('simplify_debts', True),
                 invite_link=serializer.validated_data.get('invite_link')
@@ -152,7 +150,6 @@ class GroupViewSet(viewsets.ModelViewSet):
         Body: {
             "name": "New Name",
             "type": "HOUSEHOLD",
-            "default_currency_code": "EUR",
             "simplify_debts": false
         }
         """
@@ -169,7 +166,6 @@ class GroupViewSet(viewsets.ModelViewSet):
                 updated_by=request.user,
                 name=serializer.validated_data.get('name'),
                 type=serializer.validated_data.get('type'),
-                default_currency_code=serializer.validated_data.get('default_currency_code'),
                 simplify_debts=serializer.validated_data.get('simplify_debts')
             )
         except permissions.PermissionDenied as e:
