@@ -135,7 +135,7 @@ class ErrorMessageTests(TestCase):
             message = get_username_error_message(code)
             self.assertIsNotNone(message, f"Code '{code}' should have a message")
             self.assertNotEqual(message, 'Invalid username.', f"Code '{code}' should not use default message")
-            # Just verify we got a non-empty string, don't check exact content
+            # Just verify we got a non-empty string
             self.assertTrue(len(message) > 0, f"Code '{code}' should have a non-empty message")
     
     def test_unknown_error_code(self):
@@ -145,10 +145,47 @@ class ErrorMessageTests(TestCase):
     
     def test_specific_error_messages(self):
         """Test specific error messages are reasonable."""
-        # Just verify key messages contain expected keywords
-        self.assertIn('required', get_username_error_message('username_required').lower())
-        self.assertIn('short', get_username_error_message('too_short').lower())
-        self.assertIn('long', get_username_error_message('too_long').lower())
-        self.assertIn('format', get_username_error_message('invalid_format').lower())
-        self.assertIn('reserved', get_username_error_message('reserved').lower())
-        self.assertIn('taken', get_username_error_message('taken').lower())
+        # Just verify messages contain relevant keywords
+        
+        # username_required: should mention "username" and "required"
+        required_msg = get_username_error_message('username_required').lower()
+        self.assertIn('username', required_msg)
+        self.assertIn('required', required_msg)
+        
+        # too_short: should mention characters/length
+        short_msg = get_username_error_message('too_short').lower()
+        self.assertTrue('at least' in short_msg or 'character' in short_msg)
+        
+        # too_long: should mention characters/length
+        long_msg = get_username_error_message('too_long').lower()
+        self.assertTrue('at most' in long_msg or 'character' in long_msg)
+        
+        # invalid_format: should mention what's allowed (letters, numbers, etc.)
+        format_msg = get_username_error_message('invalid_format').lower()
+        self.assertTrue(
+            'letter' in format_msg or 
+            'number' in format_msg or 
+            'contain' in format_msg,
+            f"Format message should describe allowed characters: {format_msg}"
+        )
+        
+        # reserved: should mention "reserved"
+        reserved_msg = get_username_error_message('reserved').lower()
+        self.assertIn('reserved', reserved_msg)
+        
+        # taken: should mention "taken" or "already"
+        taken_msg = get_username_error_message('taken').lower()
+        self.assertTrue('taken' in taken_msg or 'already' in taken_msg)
+        
+        # immutable_username: should mention change-related concepts
+        immutable_msg = get_username_error_message('immutable_username').lower()
+        self.assertTrue(
+            'change' in immutable_msg or 
+            'one-time' in immutable_msg or 
+            'already' in immutable_msg or
+            'used' in immutable_msg
+        )
+        
+        # same_username: should mention "same" or "current"
+        same_msg = get_username_error_message('same_username').lower()
+        self.assertTrue('same' in same_msg or 'current' in same_msg)
