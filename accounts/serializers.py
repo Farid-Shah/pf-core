@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import User
 from .services import check_handle_availability
 from django.core.exceptions import ValidationError as DjangoValidationError
-from .models import normalize_username
+from .utils import normalize_username
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -38,11 +38,22 @@ class PublicUserSerializer(serializers.ModelSerializer):
 class MeSerializer(serializers.ModelSerializer):
     """
     Authenticated user's own profile. Username is immutable here.
+    ENHANCED: Now includes username_change_allowed_until
     """
+    username_change_allowed_until = serializers.DateTimeField(read_only=True)
+    
     class Meta:
         model = User
-        fields = ("username", "first_name", "last_name", "bio", "avatar", "email")
-        read_only_fields = ("username",)
+        fields = (
+            "username", 
+            "first_name", 
+            "last_name", 
+            "bio", 
+            "avatar", 
+            "email",
+            "username_change_allowed_until"  # NEW: expose change window
+        )
+        read_only_fields = ("username", "username_change_allowed_until")
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -71,7 +82,6 @@ class UsernameChangeSerializer(serializers.Serializer):
         new_u = normalize_username(attrs["new_username"].strip())
         cur_u = normalize_username(user.username)
         if new_u == cur_u:
-            # همان نام فعلی؛ اجازه نده
             raise serializers.ValidationError({"new_username": "same_username"})
         return attrs
 
@@ -84,4 +94,3 @@ class UsernameChangeSerializer(serializers.Serializer):
             reason = e.messages[0] if e.messages else "invalid"
             raise serializers.ValidationError({"new_username": reason})
         return user
-

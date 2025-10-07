@@ -1,5 +1,4 @@
 import uuid
-import unicodedata
 from datetime import timedelta
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
@@ -8,13 +7,8 @@ from django.db import models
 from django.db.models.functions import Lower
 from django.utils import timezone
 
-
-def normalize_username(raw: str) -> str:
-    if raw is None:
-        return raw
-    s = raw.strip()
-    s = unicodedata.normalize("NFKC", s)
-    return s.lower()
+# Import from utils (single source of truth)
+from .utils import normalize_username, is_username_format_valid
 
 
 class ReservedUsername(models.Model):
@@ -22,10 +16,32 @@ class ReservedUsername(models.Model):
     Dynamic list of reserved usernames (case-insensitive).
     name     = user-facing value
     name_ci  = lowercase version used for indexing and lookups
+    
+    ENHANCED: Now supports temporary reservations for old usernames
     """
     name = models.CharField(max_length=64, unique=True)
     name_ci = models.CharField(max_length=64, unique=True, db_index=True)
     protected = models.BooleanField(default=True)
+    
+    # NEW: Support temporary reservations
+    reserved_by = models.ForeignKey(
+        'User',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='reserved_usernames',
+        help_text="User who previously had this username (for temporary reservations)"
+    )
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this reservation expires (null = permanent)"
+    )
+    reason = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Why reserved: 'system', 'previous_username', etc."
+    )
 
     def save(self, *args, **kwargs):
         self.name_ci = normalize_username(self.name)
@@ -33,6 +49,48 @@ class ReservedUsername(models.Model):
 
     def __str__(self):
         return self.name
+    
+    @classmethod
+    def is_reserved(cls, username: str) -> bool:
+        """
+        Check if a username is reserved (considering expiration).
+        
+        Args:
+            username: Username to check (will be normalized)
+            
+        Returns:
+            True if reserved, False otherwise
+        """
+        normalized = normalize_username(username)
+        now = timezone.now()
+        
+        # Check database: either permanent OR not yet expired
+        db_reserved = cls.objects.filter(name_ci=normalized).filter(
+            models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=now)
+        ).exists()
+        
+        if db_reserved:
+            return True
+        
+        # Fallback to settings (for dev/testing)
+        fallback = set(getattr(settings, "RESERVED_USERNAMES_DEFAULT", set()))
+        return normalized in {normalize_username(x) for x in fallback}
+    
+    @classmethod
+    def cleanup_expired(cls):
+        """
+        Remove expired reservations.
+        Should be called periodically (e.g., via cron/celery).
+        
+        Returns:
+            Number of expired reservations deleted
+        """
+        now = timezone.now()
+        count, _ = cls.objects.filter(
+            expires_at__isnull=False,
+            expires_at__lte=now
+        ).delete()
+        return count
 
 
 class User(AbstractUser):
@@ -98,12 +156,8 @@ class User(AbstractUser):
                 raise ValidationError("too_long")
             raise ValidationError("invalid_format")
 
-        # reserved: from DB
-        if ReservedUsername.objects.filter(name_ci=normalized).exists():
-            raise ValidationError("reserved")
-        # reserved: fallback from settings
-        fallback = set(getattr(settings, "RESERVED_USERNAMES_DEFAULT", set()))
-        if normalized in {normalize_username(x) for x in fallback}:
+        # ENHANCED: Use the new is_reserved() method
+        if ReservedUsername.is_reserved(normalized):
             raise ValidationError("reserved")
 
         # uniqueness (case-insensitive)
@@ -120,7 +174,28 @@ class User(AbstractUser):
 
     # --- Official path to change the username
     def change_username(self, new_username: str):
+        """
+        ENHANCED: Now reserves the old username temporarily
+        """
         self.clean_username_policy(new_username, changing=True)
+        
+        # NEW: Reserve the old username for the window period
+        if self.username:
+            window_days = getattr(settings, "USERNAME_CHANGE_WINDOW_DAYS", 7)
+            expires = timezone.now() + timedelta(days=window_days)
+            
+            # Create temporary reservation (or update if exists)
+            ReservedUsername.objects.update_or_create(
+                name_ci=normalize_username(self.username),
+                defaults={
+                    'name': self.username,
+                    'protected': False,
+                    'reserved_by': self,
+                    'expires_at': expires,
+                    'reason': 'previous_username'
+                }
+            )
+        
         self.username = new_username
         self.username_change_count += 1
         self.username_changed_at = timezone.now()
