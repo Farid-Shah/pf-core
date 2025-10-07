@@ -1,0 +1,64 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ---- Virtual Environments ----
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ---- Django ----
+*.log
+local_settings.py
+db.sqlite3
+media/
+staticfiles/
+static/
+
+# ---- Flask ----
+instance/
+.webassets-cache
+
+# ---- Jupyter Notebook ----
+.ipynb_checkpoints
+
+# ---- VS Code / PyCharm ----
+.vscode/
+.idea/
+
+# ---- OS Files ----
+.DS_Store
+Thumbs.db
+
+# ---- Testing & Coverage ----
+.coverage
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# ---- Build / Distribution ----
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ---- Misc ----
+*.bak
+*.swp
+*.swo
+*.tmp
+*.log
+
+# ---- Secrets ----
+*.env
+*.secret
+*.key
+*.pem
