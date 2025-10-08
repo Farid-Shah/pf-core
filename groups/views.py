@@ -11,6 +11,7 @@ Responsibilities:
 """
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -141,7 +142,7 @@ class GroupViewSet(viewsets.ModelViewSet):
         
         # Return response
         return Response(
-            GroupDetailSerializer(group).data,
+            GroupDetailSerializer(group, context={'request': request}).data,
             status=status.HTTP_201_CREATED
         )
     
@@ -171,7 +172,7 @@ class GroupViewSet(viewsets.ModelViewSet):
                 type=serializer.validated_data.get('type'),
                 simplify_debts=serializer.validated_data.get('simplify_debts')
             )
-        except permissions.PermissionDenied as e:
+        except DjangoPermissionDenied as e:
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_403_FORBIDDEN
@@ -183,7 +184,7 @@ class GroupViewSet(viewsets.ModelViewSet):
             )
         
         # Return response
-        return Response(GroupDetailSerializer(group).data)
+        return Response(GroupDetailSerializer(group, context={'request': request}).data)
     
     def partial_update(self, request, pk=None):
         """PATCH - same as update but allows partial data."""
@@ -203,7 +204,7 @@ class GroupViewSet(viewsets.ModelViewSet):
                 group=group,
                 deleted_by=request.user
             )
-        except permissions.PermissionDenied as e:
+        except DjangoPermissionDenied as e:
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_403_FORBIDDEN
@@ -247,7 +248,7 @@ class GroupViewSet(viewsets.ModelViewSet):
                 role=serializer.validated_data['role'],
                 added_by=request.user
             )
-        except permissions.PermissionDenied as e:
+        except DjangoPermissionDenied as e:
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_403_FORBIDDEN
@@ -263,10 +264,11 @@ class GroupViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Return response
+        # Return updated group details (tests expect member_count and 200 OK)
+        group.refresh_from_db()
         return Response(
-            GroupMemberSerializer(member).data,
-            status=status.HTTP_201_CREATED
+            GroupDetailSerializer(group, context={'request': request}).data,
+            status=status.HTTP_200_OK
         )
     
     @action(detail=True, methods=['delete'], url_path='remove_member/(?P<user_id>[^/.]+)')
@@ -297,7 +299,7 @@ class GroupViewSet(viewsets.ModelViewSet):
                 member_to_remove=member_to_remove,
                 removed_by=request.user
             )
-        except permissions.PermissionDenied as e:
+        except DjangoPermissionDenied as e:
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_403_FORBIDDEN
@@ -308,7 +310,12 @@ class GroupViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        # Return updated group details (tests expect 200 OK)
+        group.refresh_from_db()
+        return Response(
+            GroupDetailSerializer(group, context={'request': request}).data,
+            status=status.HTTP_200_OK
+        )
     
     @action(detail=True, methods=['post'])
     def change_role(self, request, pk=None):
@@ -347,7 +354,7 @@ class GroupViewSet(viewsets.ModelViewSet):
                 new_role=serializer.validated_data['new_role'],
                 changed_by=request.user
             )
-        except permissions.PermissionDenied as e:
+        except DjangoPermissionDenied as e:
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_403_FORBIDDEN
@@ -358,8 +365,9 @@ class GroupViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Return response
-        return Response(GroupMemberSerializer(member).data)
+        # Return updated group details for consistency
+        group.refresh_from_db()
+        return Response(GroupDetailSerializer(group, context={'request': request}).data)
     
     @action(detail=True, methods=['post'])
     def transfer_ownership(self, request, pk=None):
@@ -393,7 +401,7 @@ class GroupViewSet(viewsets.ModelViewSet):
                 new_owner_user=new_owner,
                 current_owner=request.user
             )
-        except permissions.PermissionDenied as e:
+        except DjangoPermissionDenied as e:
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_403_FORBIDDEN
@@ -410,7 +418,8 @@ class GroupViewSet(viewsets.ModelViewSet):
             )
         
         # Return updated group
-        return Response(GroupDetailSerializer(group).data)
+        group.refresh_from_db()
+        return Response(GroupDetailSerializer(group, context={'request': request}).data)
     
     @action(detail=True, methods=['post'])
     def leave(self, request, pk=None):
@@ -460,7 +469,7 @@ class GroupViewSet(viewsets.ModelViewSet):
                 group=group,
                 generated_by=request.user
             )
-        except permissions.PermissionDenied as e:
+        except DjangoPermissionDenied as e:
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_403_FORBIDDEN
@@ -492,13 +501,14 @@ class GroupViewSet(viewsets.ModelViewSet):
                 group=group,
                 revoked_by=request.user
             )
-        except permissions.PermissionDenied as e:
+        except DjangoPermissionDenied as e:
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        # Tests expect 200 OK for revoke
+        return Response({'message': 'Invite link revoked'}, status=status.HTTP_200_OK)
     
     @action(detail=False, methods=['post'], url_path='join/(?P<invite_link>[^/.]+)')
     def join_via_invite(self, request, invite_link=None):
