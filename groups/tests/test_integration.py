@@ -351,7 +351,7 @@ class RoleHierarchyIntegrationTests(TestCase):
     def setUp(self):
         """Set up users with different roles."""
         self.owner = User.objects.create_user(username='owner', email='owner@example.com')
-        self.admin = User.objects.create_user(username='admin', email='admin@example.com')
+        self.admin = User.objects.create_user(username='groupadmin', email='admin@example.com')
         self.member = User.objects.create_user(username='member', email='member@example.com')
         self.viewer = User.objects.create_user(username='viewer', email='viewer@example.com')
         

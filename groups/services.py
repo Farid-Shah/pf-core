@@ -12,6 +12,7 @@ Handles all business logic for:
 All operations enforce permission checks and maintain data integrity.
 """
 
+import secrets
 from typing import Optional
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError, PermissionDenied
@@ -472,5 +473,105 @@ class GroupService:
             #     entity_id=group.id,
             #     metadata=changes
             # )
+        
+        return group
+
+
+# ==================== Invite Link Service ====================
+
+class InviteLinkService:
+    """Service for managing group invite links."""
+    
+    @staticmethod
+    @transaction.atomic
+    def generate_invite_link(group: Group, generated_by: User) -> str:
+        """
+        Generate or regenerate invite link for a group.
+        
+        Args:
+            group: Group to generate link for
+            generated_by: User generating the link
+            
+        Returns:
+            str: Generated invite link token
+            
+        Raises:
+            PermissionDenied: If user lacks permission
+        """
+        # Permission check
+        checker = PermissionChecker(group, generated_by)
+        checker.require(GroupPermission.GENERATE_INVITE_LINK)
+        
+        # Generate random token
+        invite_link = secrets.token_urlsafe(16)
+        
+        # Save to group
+        group.invite_link = invite_link
+        group.save()
+        
+        # TODO: Log activity
+        
+        return invite_link
+    
+    @staticmethod
+    @transaction.atomic
+    def revoke_invite_link(group: Group, revoked_by: User) -> None:
+        """
+        Revoke invite link for a group.
+        
+        Args:
+            group: Group to revoke link for
+            revoked_by: User revoking the link
+            
+        Raises:
+            PermissionDenied: If user lacks permission
+        """
+        # Permission check
+        checker = PermissionChecker(group, revoked_by)
+        checker.require(GroupPermission.REVOKE_INVITE_LINK)
+        
+        # Clear invite link
+        group.invite_link = None
+        group.save()
+        
+        # TODO: Log activity
+    
+    @staticmethod
+    @transaction.atomic
+    def join_via_invite_link(invite_link: str, user: User) -> Group:
+        """
+        Join a group using an invite link.
+        
+        Args:
+            invite_link: Invite link token
+            user: User joining the group
+            
+        Returns:
+            Group: The group that was joined
+            
+        Raises:
+            ValidationError: If invite link is invalid
+            AlreadyMemberError: If user is already a member
+        """
+        # Find group with this invite link
+        try:
+            group = Group.objects.get(invite_link=invite_link)
+        except Group.DoesNotExist:
+            raise ValidationError("Invalid or expired invite link")
+        
+        # Check if already a member
+        if group.is_member(user):
+            raise AlreadyMemberError(
+                f"User {user.username} is already a member of group {group.name}"
+            )
+        
+        # Add as member
+        GroupMember.objects.create(
+            group=group,
+            user=user,
+            role=GroupMember.Role.MEMBER
+        )
+        
+        # TODO: Log activity
         
         return group

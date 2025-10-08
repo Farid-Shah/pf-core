@@ -120,7 +120,7 @@ class GroupModelTests(TestCase):
     def test_get_members_by_role(self):
         """Test getting members by role."""
         # Add members with different roles
-        admin = User.objects.create_user(username='admin', email='admin@example.com')
+        admin = User.objects.create_user(username='groupadmin', email='admin@example.com')
         GroupMember.objects.create(group=self.group, user=admin, role=GroupMember.Role.ADMIN)
         
         owners = self.group.get_members_by_role(GroupMember.Role.OWNER)
@@ -215,7 +215,7 @@ class GroupMemberModelTests(TestCase):
             role=GroupMember.Role.OWNER
         )
         
-        admin_user = User.objects.create_user(username='admin', email='admin@example.com')
+        admin_user = User.objects.create_user(username='groupadmin', email='admin@example.com')
         admin = GroupMember.objects.create(
             group=self.group,
             user=admin_user,

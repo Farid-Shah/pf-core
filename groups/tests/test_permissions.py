@@ -21,7 +21,7 @@ class PermissionCheckerTests(TestCase):
         """Set up test data with all role types."""
         # Create users for each role
         self.owner = User.objects.create_user(username='owner', email='owner@example.com')
-        self.admin = User.objects.create_user(username='admin', email='admin@example.com')
+        self.admin = User.objects.create_user(username='groupadmin', email='admin@example.com')
         self.member = User.objects.create_user(username='member', email='member@example.com')
         self.viewer = User.objects.create_user(username='viewer', email='viewer@example.com')
         self.non_member = User.objects.create_user(username='outsider', email='outsider@example.com')
