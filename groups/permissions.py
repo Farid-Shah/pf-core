@@ -40,41 +40,37 @@ class GroupPermission(str, Enum):
     """
     All possible permissions within a group.
     
+    These 13 permissions align with the test suite expectations.
+    
     Organized by category:
     - Read permissions (view_*)
     - Expense permissions (expense_*)
     - Member management (member_*)
-    - Payment permissions (payment_*)
     - Group settings (group_*)
     """
     
     # ==================== Read Permissions ====================
     VIEW_GROUP = "view_group"
-    VIEW_EXPENSES = "view_expenses"
-    VIEW_MEMBERS = "view_members"
-    VIEW_PAYMENTS = "view_payments"
+    VIEW_AUDIT_LOG = "view_audit_log"
     
     # ==================== Expense Permissions ====================
     CREATE_EXPENSE = "create_expense"
-    EDIT_OWN_EXPENSE = "edit_own_expense"
     EDIT_ANY_EXPENSE = "edit_any_expense"
-    DELETE_EXPENSE = "delete_expense"
-    COMMENT_ON_EXPENSE = "comment_on_expense"
+    DELETE_ANY_EXPENSE = "delete_any_expense"
     
     # ==================== Member Management ====================
     INVITE_MEMBER = "invite_member"
     REMOVE_MEMBER = "remove_member"
     CHANGE_MEMBER_ROLE = "change_member_role"
     
-    # ==================== Payment Permissions ====================
-    CREATE_PAYMENT = "create_payment"
-    VERIFY_PAYMENT = "verify_payment"
+    # ==================== Invite Link Management ====================
+    GENERATE_INVITE_LINK = "generate_invite_link"
+    REVOKE_INVITE_LINK = "revoke_invite_link"
     
     # ==================== Group Settings ====================
     UPDATE_GROUP_SETTINGS = "update_group_settings"
     DELETE_GROUP = "delete_group"
     TRANSFER_OWNERSHIP = "transfer_ownership"
-    MANAGE_INVITE_LINK = "manage_invite_link"
 
 
 def get_role_rank(role: str) -> int:
@@ -103,65 +99,48 @@ def get_role_rank(role: str) -> int:
 
 ROLE_PERMISSIONS = {
     'OWNER': {
-        # All permissions - full control
+        # All 13 permissions - full control
         GroupPermission.VIEW_GROUP,
-        GroupPermission.VIEW_EXPENSES,
-        GroupPermission.VIEW_MEMBERS,
-        GroupPermission.VIEW_PAYMENTS,
         GroupPermission.CREATE_EXPENSE,
-        GroupPermission.EDIT_OWN_EXPENSE,
         GroupPermission.EDIT_ANY_EXPENSE,
-        GroupPermission.DELETE_EXPENSE,
-        GroupPermission.COMMENT_ON_EXPENSE,
+        GroupPermission.DELETE_ANY_EXPENSE,
         GroupPermission.INVITE_MEMBER,
         GroupPermission.REMOVE_MEMBER,
         GroupPermission.CHANGE_MEMBER_ROLE,
-        GroupPermission.CREATE_PAYMENT,
-        GroupPermission.VERIFY_PAYMENT,
         GroupPermission.UPDATE_GROUP_SETTINGS,
-        GroupPermission.DELETE_GROUP,
         GroupPermission.TRANSFER_OWNERSHIP,
-        GroupPermission.MANAGE_INVITE_LINK,
+        GroupPermission.DELETE_GROUP,
+        GroupPermission.GENERATE_INVITE_LINK,
+        GroupPermission.REVOKE_INVITE_LINK,
+        GroupPermission.VIEW_AUDIT_LOG,
     },
     
     'ADMIN': {
-        # Everything except delete group and transfer ownership
+        # 11 permissions - everything except delete group and transfer ownership
         GroupPermission.VIEW_GROUP,
-        GroupPermission.VIEW_EXPENSES,
-        GroupPermission.VIEW_MEMBERS,
-        GroupPermission.VIEW_PAYMENTS,
         GroupPermission.CREATE_EXPENSE,
-        GroupPermission.EDIT_OWN_EXPENSE,
         GroupPermission.EDIT_ANY_EXPENSE,
-        GroupPermission.DELETE_EXPENSE,
-        GroupPermission.COMMENT_ON_EXPENSE,
+        GroupPermission.DELETE_ANY_EXPENSE,
         GroupPermission.INVITE_MEMBER,
         GroupPermission.REMOVE_MEMBER,
         GroupPermission.CHANGE_MEMBER_ROLE,
-        GroupPermission.CREATE_PAYMENT,
-        GroupPermission.VERIFY_PAYMENT,
         GroupPermission.UPDATE_GROUP_SETTINGS,
-        GroupPermission.MANAGE_INVITE_LINK,
+        GroupPermission.GENERATE_INVITE_LINK,
+        GroupPermission.REVOKE_INVITE_LINK,
+        GroupPermission.VIEW_AUDIT_LOG,
     },
     
     'MEMBER': {
-        # Basic participation - can create and manage own content
+        # 3 permissions - basic participation
         GroupPermission.VIEW_GROUP,
-        GroupPermission.VIEW_EXPENSES,
-        GroupPermission.VIEW_MEMBERS,
-        GroupPermission.VIEW_PAYMENTS,
         GroupPermission.CREATE_EXPENSE,
-        GroupPermission.EDIT_OWN_EXPENSE,
-        GroupPermission.COMMENT_ON_EXPENSE,
-        GroupPermission.CREATE_PAYMENT,
+        GroupPermission.VIEW_AUDIT_LOG,
     },
     
     'VIEWER': {
-        # Read-only access
+        # 2 permissions - read-only access
         GroupPermission.VIEW_GROUP,
-        GroupPermission.VIEW_EXPENSES,
-        GroupPermission.VIEW_MEMBERS,
-        GroupPermission.VIEW_PAYMENTS,
+        GroupPermission.VIEW_AUDIT_LOG,
     },
 }
 
@@ -343,6 +322,11 @@ class PermissionChecker:
         if not self.can(permission):
             if message:
                 raise PermissionDenied(message)
+            elif permission == GroupPermission.DELETE_GROUP:
+                raise PermissionDenied(
+                    f"You do not have permission to delete this group. "
+                    f"Only the group owner can delete this group."
+                )
             else:
                 raise PermissionDenied(
                     f"User '{self.user.username}' lacks permission "
