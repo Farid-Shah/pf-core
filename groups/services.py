@@ -58,6 +58,16 @@ class InvalidRoleError(MembershipError):
     pass
 
 
+class CannotRemoveOwnerError(MembershipError):
+    """Cannot remove the group owner."""
+    pass
+
+
+class OwnershipTransferError(MembershipError):
+    """Owner must transfer ownership before leaving."""
+    pass
+
+
 # ==================== Main Service Class ====================
 
 class GroupMembershipService:
@@ -135,32 +145,61 @@ class GroupMembershipService:
     @transaction.atomic
     def remove_member(
         group: Group,
-        member_to_remove: GroupMember,
-        removed_by: User
+        removed_by: User,
+        member_to_remove: Optional[GroupMember] = None,
+        user_to_remove: Optional[User] = None
     ):
         """
         Remove a member from the group.
         
         Args:
             group: Group to remove from
-            member_to_remove: GroupMember instance to remove
             removed_by: User performing the action
+            member_to_remove: GroupMember instance to remove (optional)
+            user_to_remove: User to remove (optional, alternative to member_to_remove)
             
         Raises:
             PermissionDenied: If removed_by lacks permission
-            OwnerRequiredError: If trying to remove owner
+            CannotRemoveOwnerError: If trying to remove owner (business rule)
+            NotMemberError: If user is not a member
         """
-        # Permission check
+        # Handle both signatures for compatibility
+        if member_to_remove is None and user_to_remove is not None:
+            member_to_remove = group.get_member(user_to_remove)
+            if not member_to_remove:
+                raise NotMemberError(
+                    f"{user_to_remove.username} is not a member of {group.name}"
+                )
+        
+        if member_to_remove is None:
+            raise ValueError("Either member_to_remove or user_to_remove must be provided")
+        
+        # Create permission checker
         checker = PermissionChecker(group, removed_by)
         
-        # Cannot remove the owner
+        # Full permission check using can_remove_member
+        # This checks: base permission, not self, and rank hierarchy
+        can_remove = checker.can_remove_member(member_to_remove)
+        
+        # If they can't remove for rank/permission reasons, raise PermissionDenied first
+        # This ensures admin trying to remove owner gets PermissionDenied (due to rank)
+        # rather than CannotRemoveOwnerError
+        if not can_remove and not (member_to_remove.user_id == checker.user.id and member_to_remove.is_owner):
+            # Not allowed due to permission/rank (not because they're trying to remove themselves as owner)
+            raise PermissionDenied(
+                f"Cannot remove {member_to_remove.user.username} from {group.name}"
+            )
+        
+        # Special case: trying to remove owner (either self or someone else who is owner)
+        # If we get here and target is owner, it means owner is trying to remove themselves
+        # (because anyone else would have failed the rank check above)
         if member_to_remove.is_owner:
-            raise OwnerRequiredError(
+            raise CannotRemoveOwnerError(
                 "Cannot remove group owner. Transfer ownership first."
             )
         
-        # Check if user can remove this specific member
-        if not checker.can_remove_member(member_to_remove):
+        # Final check - if they still can't remove for other reasons (shouldn't reach here)
+        if not can_remove:
             raise PermissionDenied(
                 f"Cannot remove {member_to_remove.user.username} from {group.name}"
             )
@@ -318,7 +357,7 @@ class GroupMembershipService:
         """
         User leaves the group.
         
-        Owner cannot leave (must transfer ownership first).
+        Owner cannot leave (must transfer ownership first or delete the group).
         
         Args:
             group: Group to leave
@@ -326,7 +365,7 @@ class GroupMembershipService:
             
         Raises:
             NotMemberError: If user is not a member
-            OwnerRequiredError: If user is the owner
+            OwnershipTransferError: If user is the owner
         """
         member = group.get_member(user)
         
@@ -336,7 +375,7 @@ class GroupMembershipService:
             )
         
         if member.is_owner:
-            raise OwnerRequiredError(
+            raise OwnershipTransferError(
                 "Group owner cannot leave. Transfer ownership first or delete the group."
             )
         
@@ -475,6 +514,35 @@ class GroupService:
             # )
         
         return group
+    
+    @staticmethod
+    @transaction.atomic
+    def delete_group(group: Group, deleted_by: User):
+        """
+        Delete a group.
+        
+        Args:
+            group: Group to delete
+            deleted_by: User deleting the group
+            
+        Raises:
+            PermissionDenied: If deleted_by lacks permission
+        """
+        # Permission check
+        checker = PermissionChecker(group, deleted_by)
+        checker.require(GroupPermission.DELETE_GROUP)
+        
+        # Delete the group
+        group.delete()
+        
+        # TODO: Log activity
+        # ActivityLog.log(
+        #     actor=deleted_by,
+        #     verb='deleted',
+        #     entity_type='group',
+        #     entity_id=group.id,
+        #     metadata={'name': group.name}
+        # )
 
 
 # ==================== Invite Link Service ====================

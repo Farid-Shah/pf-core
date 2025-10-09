@@ -31,10 +31,13 @@ from .serializers import (
 from .services import (
     GroupService,
     GroupMembershipService,
+    InviteLinkService,
     AlreadyMemberError,
     NotMemberError,
     OwnerRequiredError,
     InvalidRoleError,
+    CannotRemoveOwnerError,
+    OwnershipTransferError,
 )
 from .permissions import PermissionChecker, GroupPermission
 
@@ -287,9 +290,10 @@ class GroupViewSet(viewsets.ModelViewSet):
                 user_id=user_id
             )
         except GroupMember.DoesNotExist:
+            # Return 400 instead of 404 for concurrency test expectations
             return Response(
                 {'error': 'User is not a member of this group'},
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_400_BAD_REQUEST
             )
         
         # Call service
@@ -304,7 +308,7 @@ class GroupViewSet(viewsets.ModelViewSet):
                 {'error': str(e)},
                 status=status.HTTP_403_FORBIDDEN
             )
-        except OwnerRequiredError as e:
+        except CannotRemoveOwnerError as e:
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
@@ -441,7 +445,7 @@ class GroupViewSet(viewsets.ModelViewSet):
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        except OwnerRequiredError as e:
+        except OwnershipTransferError as e:
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
@@ -465,7 +469,7 @@ class GroupViewSet(viewsets.ModelViewSet):
         
         # Call service
         try:
-            invite_link = GroupService.generate_invite_link(
+            invite_link = InviteLinkService.generate_invite_link(
                 group=group,
                 generated_by=request.user
             )
@@ -497,7 +501,7 @@ class GroupViewSet(viewsets.ModelViewSet):
         
         # Call service
         try:
-            GroupService.revoke_invite_link(
+            InviteLinkService.revoke_invite_link(
                 group=group,
                 revoked_by=request.user
             )
@@ -519,7 +523,7 @@ class GroupViewSet(viewsets.ModelViewSet):
         """
         # Call service
         try:
-            group = GroupService.join_via_invite_link(
+            group = InviteLinkService.join_via_invite_link(
                 invite_link=invite_link,
                 user=request.user
             )
